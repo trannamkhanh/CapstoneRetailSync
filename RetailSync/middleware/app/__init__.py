@@ -1,0 +1,1 @@
+"""RetailSync middleware application package."""
