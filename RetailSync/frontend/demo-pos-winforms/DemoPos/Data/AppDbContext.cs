@@ -1,172 +1,150 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Threading;
+using System.Threading.Tasks;
 using DemoPos.Data.Entities;
 using DemoPos.Models;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace DemoPos.Data;
 
-/// <summary>
-/// EF Core DbContext trên SQLite (file pos.db).
-/// Lưu toàn bộ trạng thái POS: sản phẩm, terminal, giao dịch, dòng bán/trả/hủy và audit log.
-/// </summary>
 public class AppDbContext : DbContext
 {
-    /// <summary>Đường dẫn mặc định của file database (cạnh file exe).</summary>
-    public static string DefaultConnectionString =>
-        $"Data Source={Path.Combine(AppContext.BaseDirectory, "pos.db")}";
+	private readonly string _connectionString;
 
-    private readonly string _connectionString;
+	public static string DefaultConnectionString => "Data Source=" + Path.Combine(AppContext.BaseDirectory, "pos.db");
 
-    public AppDbContext(string? connectionString = null)
-    {
-        _connectionString = string.IsNullOrWhiteSpace(connectionString)
-            ? DefaultConnectionString
-            : connectionString;
-    }
+	public DbSet<ProductEntity> Products => ((DbContext)this).Set<ProductEntity>();
 
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
-    {
-        _connectionString = DefaultConnectionString;
-    }
+	public DbSet<TerminalEntity> Terminals => ((DbContext)this).Set<TerminalEntity>();
 
-    public DbSet<ProductEntity> Products => Set<ProductEntity>();
+	public DbSet<TransactionEntity> Transactions => ((DbContext)this).Set<TransactionEntity>();
 
-    public DbSet<TerminalEntity> Terminals => Set<TerminalEntity>();
+	public DbSet<SoldItemEntity> SoldItems => ((DbContext)this).Set<SoldItemEntity>();
 
-    public DbSet<TransactionEntity> Transactions => Set<TransactionEntity>();
+	public DbSet<ReturnedItemEntity> ReturnedItems => ((DbContext)this).Set<ReturnedItemEntity>();
 
-    public DbSet<SoldItemEntity> SoldItems => Set<SoldItemEntity>();
+	public DbSet<CancelledTransactionEntity> CancelledTransactions => ((DbContext)this).Set<CancelledTransactionEntity>();
 
-    public DbSet<ReturnedItemEntity> ReturnedItems => Set<ReturnedItemEntity>();
+	public DbSet<EventLogEntity> EventLogs => ((DbContext)this).Set<EventLogEntity>();
 
-    public DbSet<CancelledTransactionEntity> CancelledTransactions => Set<CancelledTransactionEntity>();
+	public DbSet<AppSettingEntity> AppSettings => ((DbContext)this).Set<AppSettingEntity>();
 
-    public DbSet<EventLogEntity> EventLogs => Set<EventLogEntity>();
+	public AppDbContext(string? connectionString = null)
+	{
+		_connectionString = (string.IsNullOrWhiteSpace(connectionString) ? DefaultConnectionString : connectionString);
+	}
 
-    public DbSet<AppSettingEntity> AppSettings => Set<AppSettingEntity>();
+	public AppDbContext(DbContextOptions<AppDbContext> options)
+		: base((DbContextOptions)(object)options)
+	{
+		_connectionString = DefaultConnectionString;
+	}
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-        if (!optionsBuilder.IsConfigured)
-        {
-            // journal_mode=DELETE (thay vì WAL): toàn bộ dữ liệu nằm trong 1 file pos.db duy nhất,
-            // không sinh thêm pos.db-wal / pos.db-shm -> copy đi đóng gói an toàn.
-            optionsBuilder.UseSqlite(_connectionString);
-        }
-    }
+	protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+	{
+		if (!optionsBuilder.IsConfigured)
+		{
+			SqliteDbContextOptionsBuilderExtensions.UseSqlite(optionsBuilder, _connectionString, (Action<SqliteDbContextOptionsBuilder>)null);
+		}
+	}
 
-    /// <summary>
-    /// Đóng kết nối và trả file về trạng thái tự chứa (checkpoint WAL + journal_mode=DELETE).
-    /// Gọi trước khi copy file .db đi đóng gói.
-    /// </summary>
-    public void Compact()
-    {
-        try
-        {
-            Database.ExecuteSqlRaw("PRAGMA wal_checkpoint(TRUNCATE);");
-            Database.ExecuteSqlRaw("PRAGMA journal_mode=DELETE;");
-        }
-        catch (Microsoft.Data.Sqlite.SqliteException)
-        {
-            // Database chưa mở / không phải WAL: bỏ qua.
-        }
+	public void Compact()
+	{
+		try
+		{
+			RelationalDatabaseFacadeExtensions.ExecuteSqlRaw(((DbContext)this).Database, "PRAGMA wal_checkpoint(TRUNCATE);", Array.Empty<object>());
+			RelationalDatabaseFacadeExtensions.ExecuteSqlRaw(((DbContext)this).Database, "PRAGMA journal_mode=DELETE;", Array.Empty<object>());
+		}
+		catch (SqliteException)
+		{
+		}
+		RelationalDatabaseFacadeExtensions.CloseConnection(((DbContext)this).Database);
+		SqliteConnection.ClearAllPools();
+	}
 
-        Database.CloseConnection();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-    }
+	protected override void OnModelCreating(ModelBuilder modelBuilder)
+	{
+		base.OnModelCreating(modelBuilder);
+		modelBuilder.Entity<ProductEntity>((Action<EntityTypeBuilder<ProductEntity>>)((EntityTypeBuilder<ProductEntity> entity) =>
+		{
+			entity.HasKey((Expression<Func<ProductEntity, object>>)((ProductEntity e) => e.Sku));
+			RelationalPropertyBuilderExtensions.HasColumnType<decimal>(entity.Property<decimal>((Expression<Func<ProductEntity, decimal>>)((ProductEntity e) => e.UnitPrice)), "decimal(18,2)");
+			entity.HasIndex((Expression<Func<ProductEntity, object>>)((ProductEntity e) => e.Barcode)).IsUnique(true);
+		}));
+		modelBuilder.Entity<TerminalEntity>((Action<EntityTypeBuilder<TerminalEntity>>)((EntityTypeBuilder<TerminalEntity> entity) =>
+		{
+			entity.HasKey((Expression<Func<TerminalEntity, object>>)((TerminalEntity e) => new { e.StoreId, e.PosId }));
+		}));
+		modelBuilder.Entity<TransactionEntity>((Action<EntityTypeBuilder<TransactionEntity>>)((EntityTypeBuilder<TransactionEntity> entity) =>
+		{
+			entity.HasKey((Expression<Func<TransactionEntity, object>>)((TransactionEntity e) => e.TransactionId));
+			entity.HasIndex((Expression<Func<TransactionEntity, object>>)((TransactionEntity e) => new { e.StoreId, e.PosId, e.EventType }));
+			entity.HasIndex((Expression<Func<TransactionEntity, object>>)((TransactionEntity e) => e.OriginalTransactionId));
+		}));
+		modelBuilder.Entity<SoldItemEntity>((Action<EntityTypeBuilder<SoldItemEntity>>)((EntityTypeBuilder<SoldItemEntity> entity) =>
+		{
+			entity.HasKey((Expression<Func<SoldItemEntity, object>>)((SoldItemEntity e) => e.Id));
+			entity.HasIndex((Expression<Func<SoldItemEntity, object>>)((SoldItemEntity e) => e.TransactionId));
+			entity.HasIndex((Expression<Func<SoldItemEntity, object>>)((SoldItemEntity e) => e.Sku));
+		}));
+		modelBuilder.Entity<ReturnedItemEntity>((Action<EntityTypeBuilder<ReturnedItemEntity>>)((EntityTypeBuilder<ReturnedItemEntity> entity) =>
+		{
+			entity.HasKey((Expression<Func<ReturnedItemEntity, object>>)((ReturnedItemEntity e) => e.Id));
+			entity.HasIndex((Expression<Func<ReturnedItemEntity, object>>)((ReturnedItemEntity e) => e.OriginalTransactionId));
+			entity.HasIndex((Expression<Func<ReturnedItemEntity, object>>)((ReturnedItemEntity e) => e.Sku));
+		}));
+		modelBuilder.Entity<CancelledTransactionEntity>((Action<EntityTypeBuilder<CancelledTransactionEntity>>)((EntityTypeBuilder<CancelledTransactionEntity> entity) =>
+		{
+			entity.HasKey((Expression<Func<CancelledTransactionEntity, object>>)((CancelledTransactionEntity e) => e.TransactionId));
+		}));
+		modelBuilder.Entity<EventLogEntity>((Action<EntityTypeBuilder<EventLogEntity>>)((EntityTypeBuilder<EventLogEntity> entity) =>
+		{
+			entity.HasKey((Expression<Func<EventLogEntity, object>>)((EventLogEntity e) => e.Id));
+			entity.HasIndex((Expression<Func<EventLogEntity, object>>)((EventLogEntity e) => e.TransactionId));
+			entity.HasIndex((Expression<Func<EventLogEntity, object>>)((EventLogEntity e) => e.CreatedAt));
+		}));
+		modelBuilder.Entity<AppSettingEntity>((Action<EntityTypeBuilder<AppSettingEntity>>)((EntityTypeBuilder<AppSettingEntity> entity) =>
+		{
+			entity.HasKey((Expression<Func<AppSettingEntity, object>>)((AppSettingEntity e) => e.Key));
+		}));
+	}
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        base.OnModelCreating(modelBuilder);
-
-        modelBuilder.Entity<ProductEntity>(entity =>
-        {
-            entity.HasKey(e => e.Sku);
-            entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,2)");
-            entity.HasIndex(e => e.Barcode).IsUnique();
-        });
-
-        modelBuilder.Entity<TerminalEntity>(entity =>
-        {
-            entity.HasKey(e => new { e.StoreId, e.PosId });
-        });
-
-        modelBuilder.Entity<TransactionEntity>(entity =>
-        {
-            entity.HasKey(e => e.TransactionId);
-            entity.HasIndex(e => new { e.StoreId, e.PosId, e.EventType });
-            entity.HasIndex(e => e.OriginalTransactionId);
-        });
-
-        modelBuilder.Entity<SoldItemEntity>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.HasIndex(e => e.TransactionId);
-            entity.HasIndex(e => e.Sku);
-        });
-
-        modelBuilder.Entity<ReturnedItemEntity>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.HasIndex(e => e.OriginalTransactionId);
-            entity.HasIndex(e => e.Sku);
-        });
-
-        modelBuilder.Entity<CancelledTransactionEntity>(entity =>
-        {
-            entity.HasKey(e => e.TransactionId);
-        });
-
-        modelBuilder.Entity<EventLogEntity>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.HasIndex(e => e.TransactionId);
-            entity.HasIndex(e => e.CreatedAt);
-        });
-
-        modelBuilder.Entity<AppSettingEntity>(entity =>
-        {
-            entity.HasKey(e => e.Key);
-        });
-    }
-
-    /// <summary>
-    /// Tạo database (nếu chưa có) và seed danh mục sản phẩm + terminal.
-    /// Chỉ seed khi bảng tương ứng còn rỗng nên gọi nhiều lần vẫn an toàn.
-    /// </summary>
-    public async Task EnsureCreatedAndSeedAsync(AppConfig config, CancellationToken cancellationToken = default)
-    {
-        await Database.EnsureCreatedAsync(cancellationToken);
-
-        if (!await Products.AnyAsync(cancellationToken))
-        {
-            var products = ProductCatalog.CreateProducts().Select(p => new ProductEntity
-            {
-                Sku = p.Sku,
-                Barcode = p.Barcode,
-                Name = p.Name,
-                UnitPrice = p.UnitPrice,
-                InitialStock = p.InitialStock,
-                CurrentStock = p.InitialStock
-            });
-
-            await Products.AddRangeAsync(products, cancellationToken);
-        }
-
-        if (!await Terminals.AnyAsync(cancellationToken))
-        {
-            var terminals = config.Terminals.Select(t => new TerminalEntity
-            {
-                StoreId = t.StoreId,
-                PosId = t.PosId,
-                StoreName = t.StoreName,
-                Token = t.Token,
-                IsActive = true
-            });
-
-            await Terminals.AddRangeAsync(terminals, cancellationToken);
-        }
-
-        await SaveChangesAsync(cancellationToken);
-    }
+	public async Task EnsureCreatedAndSeedAsync(AppConfig config, CancellationToken cancellationToken = default(CancellationToken))
+	{
+		await ((DbContext)this).Database.EnsureCreatedAsync(cancellationToken);
+		if (!(await EntityFrameworkQueryableExtensions.AnyAsync<ProductEntity>((IQueryable<ProductEntity>)Products, cancellationToken)))
+		{
+			IEnumerable<ProductEntity> products = from p in ProductCatalog.CreateProducts()
+				select new ProductEntity
+				{
+					Sku = p.Sku,
+					Barcode = p.Barcode,
+					Name = p.Name,
+					UnitPrice = p.UnitPrice,
+					InitialStock = p.InitialStock,
+					CurrentStock = p.InitialStock
+				};
+			await Products.AddRangeAsync(products, cancellationToken);
+		}
+		if (!(await EntityFrameworkQueryableExtensions.AnyAsync<TerminalEntity>((IQueryable<TerminalEntity>)Terminals, cancellationToken)))
+		{
+			IEnumerable<TerminalEntity> terminals = config.Terminals.Select((TerminalConfig t) => new TerminalEntity
+			{
+				StoreId = t.StoreId,
+				PosId = t.PosId,
+				StoreName = t.StoreName,
+				Token = t.Token,
+				IsActive = true
+			});
+			await Terminals.AddRangeAsync(terminals, cancellationToken);
+		}
+		await ((DbContext)this).SaveChangesAsync(cancellationToken);
+	}
 }

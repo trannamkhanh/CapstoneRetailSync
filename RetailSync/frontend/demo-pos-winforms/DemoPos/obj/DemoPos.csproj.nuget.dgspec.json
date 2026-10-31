@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "g:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\DemoPos.csproj": {}
+    "G:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\DemoPos.csproj": {}
   },
   "projects": {
-    "g:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\DemoPos.csproj": {
+    "G:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\DemoPos.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "g:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\DemoPos.csproj",
+        "projectUniqueName": "G:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\DemoPos.csproj",
         "projectName": "DemoPos",
-        "projectPath": "g:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\DemoPos.csproj",
+        "projectPath": "G:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\DemoPos.csproj",
         "packagesPath": "C:\\Users\\quang\\.nuget\\packages\\",
-        "outputPath": "g:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\obj\\",
+        "outputPath": "G:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

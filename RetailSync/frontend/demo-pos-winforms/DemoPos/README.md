@@ -5,11 +5,106 @@ Dev Tools mô phỏng lỗi và lịch sử phiên. UI chỉ nói chuyện với
 
 | Chế độ | Backend | Lưu dữ liệu |
 |---|---|---|
-| `Mock` (mặc định) | `MockPosBackend` | RAM, mất khi tắt app |
-| `SQLite` | `SqlitePosBackend` | file `pos.db` (EF Core 8 + SQLite) |
+| `SQLite` (mặc định) | `SqlitePosBackend` | file `pos.db` (EF Core 8 + SQLite) |
+| `Mock` | `MockPosBackend` | RAM, mất khi tắt app |
 | `Api` | `PosApiClient` | FastAPI Middleware qua HTTP |
 
 > Chi tiết schema database: xem [DATABASE.md](DATABASE.md).
+
+---
+
+## 0. Hướng dẫn chạy từ đầu (Quick Start)
+
+### Bước 1 — Kiểm tra yêu cầu môi trường
+
+| Yêu cầu | Bắt buộc | Kiểm tra bằng |
+|---|---|---|
+| Windows 10/11 (64-bit) | ✅ | — |
+| **.NET 8 SDK** (8.0.x) | ✅ để build/run | `dotnet --version` → phải in ra `8.0.x` |
+| Visual Studio 2022 (17.8+) **hoặc** VS Code + C# Dev Kit | ⬜ tùy chọn | Chỉ cần nếu muốn mở bằng IDE |
+| Internet (lần đầu) | ⬜ | Để `dotnet restore` tải NuGet |
+
+Nếu chưa có .NET 8 SDK: tải tại <https://dotnet.microsoft.com/download/dotnet/8.0>
+(chọn **SDK x64**, không phải Runtime).
+
+Kiểm tra lại:
+```powershell
+dotnet --version            # 8.0.xxx
+dotnet --list-sdks          # phải có dòng 8.0.x
+```
+
+### Bước 2 — Mở terminal tại thư mục project
+
+```powershell
+cd G:\CapstoneRetailSync\RetailSync\frontend\demo-pos-winforms\DemoPos
+```
+
+> Đảm bảo thấy các file `DemoPos.csproj`, `appsettings.json`, `pos.db`.
+> Nếu không thấy → đang đứng sai thư mục.
+
+### Bước 3 — Khôi phục NuGet package (lần đầu hoặc sau khi clone)
+
+```powershell
+dotnet restore
+```
+
+Kết quả mong đợi: tải về `Microsoft.EntityFrameworkCore.Sqlite` 8.0.0, `SQLitePCLRaw.*`, `Microsoft.Data.Sqlite.Core`.
+Nếu lỗi mạng → kiểm tra proxy/firewall rồi chạy lại.
+
+### Bước 4 — Build (tùy chọn, để bắt lỗi compile sớm)
+
+```powershell
+dotnet build
+```
+
+Kết quả mong đợi: `Build succeeded. 0 Warning(s) 0 Error(s)`.
+
+### Bước 5 — Chạy ứng dụng
+
+```powershell
+dotnet run
+```
+
+Cửa sổ **Demo POS Terminal** mở ra. Lần chạy đầu:
+1. `appsettings.json` + `pos.db` được copy sang `bin\Debug\net8.0-windows\`.
+2. App mở kết nối SQLite, seed sẵn 10 SKU + 6 terminal (nếu DB trống).
+3. Thanh công cụ hiển thị `● SQLITE (pos.db)` — nghĩa là đang lưu xuống file thật.
+
+### Bước 6 — Thử ngay một giao dịch
+
+1. Tab **Bán hàng** → chọn 1 sản phẩm trong danh sách → bấm **Thêm vào giỏ**.
+2. Sửa cột **SL** nếu muốn.
+3. Bấm **Gửi giao dịch** (hoặc phím `F9`).
+4. Bảng kết quả hiện `✔ THÀNH CÔNG` + mã `SALE_ACCEPTED` + tồn kho mới.
+5. Bấm `F12` để mở **Dev Tools** và thử các kịch bản lỗi (DUPLICATE, CONFLICT, 503…).
+
+### Bước 7 — Xác nhận dữ liệu đã lưu
+
+```powershell
+Get-Item .\bin\Debug\net8.0-windows\pos.db
+```
+Đóng app → mở lại → tồn kho vẫn giữ nguyên số đã bán ⇒ SQLite hoạt động đúng.
+
+### Bước 8 — (Tùy chọn) Kiểm tra tự động
+
+```powershell
+dotnet run -- selfcheck
+```
+Chạy 17 kiểm tra backend SQLite, kết thúc bằng `==> TẤT CẢ KIỂM TRA ĐỀU PASS` và exit code `0`.
+
+---
+
+### Xử lý sự cố thường gặp
+
+| Triệu chứng | Nguyên nhân | Cách xử lý |
+|---|---|---|
+| `dotnet: command not found` | Chưa cài .NET SDK | Cài .NET 8 SDK, mở terminal mới |
+| `NETSDK1045: The current .NET SDK does not support targeting .NET 8.0` | SDK cũ (6/7) | Cài .NET 8 SDK, chạy `dotnet --list-sdks` kiểm tra |
+| `Unable to load shared library 'e_sqlite3'` | Thiếu native SQLite | Chạy `dotnet restore` lại; đảm bảo không xóa thư mục `runtimes/` trong `bin` |
+| App mở nhưng bảng sản phẩm trống | Không tìm thấy `appsettings.json` | Kiểm tra file có cạnh `DemoPos.exe`; app tự fallback về thư mục hiện tại |
+| `appsettings.json không hợp lệ` | Sai cú pháp JSON | Sửa theo mẫu ở mục 2; `BackendMode` phải đúng `SQLite`/`Mock`/`Api` |
+| `database is locked` | 2 instance app cùng mở 1 file | Đóng app cũ; chỉ chạy 1 instance |
+| Đã bán thử nhiều, tồn kho lệch | Cần reset về trạng thái seed | `dotnet run -- initdb` hoặc copy đè `pos.db` từ thư mục project |
 
 ---
 
@@ -58,7 +153,7 @@ DemoPos/
 ```json
 {
   "BaseUrl": "http://localhost:8000/api/v1",
-  "BackendMode": "Mock",
+  "BackendMode": "SQLite",
   "SqliteConnectionString": "Data Source=pos.db",
   "Terminals": [
     { "StoreId": "S-01", "StoreName": "Cửa hàng Nguyễn Văn A", "PosId": "POS-01", "Token": "demo-pos-jwt-store-01-pos-01" },
@@ -207,4 +302,3 @@ Không cần cài .NET runtime hay SQLite trên máy POS.
 * `Reset` ở chế độ `Api` chỉ khôi phục cache tồn kho trên UI, không xóa dữ liệu Middleware.
 * Chế độ `Mock` không lưu đĩa — lịch sử chỉ tồn tại trong phiên.
 * Project nội bộ — Capstone RetailSync.
-| `Esc` | Xóa kết quả / focus tìm kiếm |

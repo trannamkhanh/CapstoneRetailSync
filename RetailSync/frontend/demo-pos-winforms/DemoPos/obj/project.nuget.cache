@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "5h0zx25UWtQ=",
+  "dgSpecHash": "Rje52tEfDfI=",
   "success": true,
-  "projectFilePath": "g:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\DemoPos.csproj",
+  "projectFilePath": "G:\\CapstoneRetailSync\\RetailSync\\frontend\\demo-pos-winforms\\DemoPos\\DemoPos.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\quang\\.nuget\\packages\\microsoft.data.sqlite.core\\8.0.0\\microsoft.data.sqlite.core.8.0.0.nupkg.sha512",
     "C:\\Users\\quang\\.nuget\\packages\\microsoft.entityframeworkcore\\8.0.0\\microsoft.entityframeworkcore.8.0.0.nupkg.sha512",
