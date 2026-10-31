@@ -1,0 +1,4 @@
+G:\CapstoneRetailSync\RetailSync\frontend\demo-pos-winforms\DemoPos\publish\DemoPos.pdb
+G:\CapstoneRetailSync\RetailSync\frontend\demo-pos-winforms\DemoPos\publish\appsettings.json
+G:\CapstoneRetailSync\RetailSync\frontend\demo-pos-winforms\DemoPos\publish\pos.db
+G:\CapstoneRetailSync\RetailSync\frontend\demo-pos-winforms\DemoPos\publish\DemoPos.exe
