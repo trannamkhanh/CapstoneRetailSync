@@ -2,3 +2,12 @@
 [Oo]bj/
 .vs/
 *.user
+# Local environment files and generated demo certificates
+.env
+RetailSync/certs/generated/
+RetailSync/certs/**/*.key
+RetailSync/certs/**/*.pfx
+__pycache__/
+*.pyc
+.venv/
+*.pem
